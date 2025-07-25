@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sticky Notes</title> <!-- Title changed to "Sticky Notes" -->
+    <!-- Script para cargar la fuente Roboto Condensed de Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* General body styles */
+        body {
+            font-family: 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+            background-color: #191919; /* Dark gray, almost black background */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+            height: 100vh; /* Changed from min-height to height to allow flex-grow on board */
+            box-sizing: border-box;
+            color: #E0E0E0; /* General text color for body */
+        }
+
+        /* Main header styles */
+        h1 {
+            color: #8ACE00; /* Bright green text color */
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* Shadow for the title */
+        }
+
+        /* Add note button styles */
+        #add-note-btn {
+            background-color: #8ACE00; /* Vibrant green */
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease, color 0.3s ease; /* Added color transition */
+            font-family: 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+            font-weight: normal; /* Cambiado: De 'bold' a 'normal' */
+        }
+
+        /* CAMBIO CLAVE: Estilos de hover y active para el botón de agregar nota */
+        #add-note-btn:hover {
+            background-color: #000000; /* Fondo negro al pasar el ratón */
+            color: #8ACE00; /* Texto verde brillante al pasar el ratón */
+            transform: scale(1.05); /* Efecto de escala */
+            /* Se añade la sombra verde brillante junto con la sombra negra existente */
+            box-shadow: 0 0 15px #8ACE00, 0 6px 12px rgba(0, 0, 0, 0.3); 
+        }
+
+        #add-note-btn:active {
+            background-color: #1a1a1a; /* Un negro un poco más claro al hacer clic */
+            color: #8ACE00; /* Texto verde brillante al hacer clic */
+            transform: scale(0.95); /* Efecto de "presionado" */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Sombra más sutil */
+        }
+
+        /* Styles for the board where notes are placed */
+        #board {
+            width: 90%;
+            max-width: 1200px;
+            flex-grow: 1; /* Allows the board to take up all available vertical space */
+            background-color: #282828; /* Darker board background for better contrast */
+            border: 2px solid #555555;
+            border-radius: 12px; /* More rounded corners */
+            padding: 20px; /* Base padding */
+            position: relative;
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.4); /* Deeper shadows */
+            overflow: auto;   /* Allows both vertical and horizontal scrollbars only when content overflows */
+            display: grid;
+            /* Permite que las columnas de la cuadrícula se contraigan a casi 0px */
+            grid-template-columns: repeat(auto-fill, minmax(1px, 1fr)); 
+            grid-auto-rows: minmax(120px, auto); /* Minimum row height */
+            /* gap: 20px; -- REMOVED: Eliminar el espacio fijo que causaba el scrollbar */
+            align-items: start; /* Align notes to the start of their cell */
+            justify-items: center; /* Center notes horizontally in their cell */
+        }
+
+        /* Styles for each Post-it note */
+        .note {
+            background-color: #2D2D2D; /* Dark gray for notes */
+            border: 1px solid #444; /* Subtle border */
+            border-radius: 10px; /* Slightly more rounded corners */
+            padding: 15px;
+            box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5); /* More pronounced shadow */
+            position: absolute; /* Keep absolute for dragging and manual resizing */
+            /* REMOVED: overflow: hidden; - This was causing the menu to be clipped */
+            cursor: grab;
+            transition: box-shadow 0.2s ease-in-out, transform 0.1s ease-out, background-color 0.3s ease;
+            min-width: 160px; /* Adjusted: Larger default and minimum size */
+            min-height: 120px; /* Adjusted: Larger default and minimum size */
+            display: flex;
+            flex-direction: column;
+            z-index: 1; /* Initial z-index, adjusted by JS */
+            resize: none; /* DISABLED: Native resizing on the note */
+            /* NUEVO: Propiedades de animación iniciales para la entrada */
+            opacity: 0;
+            transform: scale(0.8) translateY(20px);
+            animation: note-fade-in 0.3s ease-out forwards;
+        }
+
+        /* NUEVO: Keyframes para animación de entrada de notas */
+        @keyframes note-fade-in {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        /* NUEVO: Keyframes para animación de salida de notas */
+        @keyframes note-fade-out {
+            from {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.8) translateY(-20px);
+            }
+        }
+
+        /* NUEVO: Clase para notas que están en proceso de ser eliminadas */
+        .note.removing {
+            animation: note-fade-out 0.3s ease-in forwards;
+            pointer-events: none; /* Deshabilita la interacción durante la animación de salida */
+        }
+
+
+        .note.resizing { /* New class for visual feedback during resizing */
+            box-shadow: 0 0 10px #8ACE00, 6px 6px 15px rgba(0, 0, 0, 0.7); /* Added green glow to resizing */
+            opacity: 0.9;
+        }
+
+        .note:hover {
+            box-shadow: 6px 6px 15px rgba(0, 0, 0, 0.7); /* More pronounced shadow on hover */
+            transform: translateY(-4px); /* Small lift effect on hover */
+            background-color: #383838; /* Slightly lighter on hover */
+        }
+
+        /* CAMBIO CLAVE: Sombra verde al arrastrar la nota */
+        .note.dragging {
+            z-index: 1000 !important;
+            cursor: grabbing;
+            transform: scale(1.03) rotate(2deg) !important; /* ADDED !important here */
+            box-shadow: 0 0 20px #8ACE00, 8px 8px 20px rgba(0, 0, 0, 0.8); /* Added green glow to dragging */
+        }
+
+        /* Note header styles (contains the delete button and menu toggle) */
+        .note-header {
+            display: flex;
+            justify-content: space-between; /* Space between left and right elements */
+            align-items: flex-start; /* Align items to the top */
+            margin-bottom: 10px;
+            position: relative; /* For positioning of the menu toggle button */
+        }
+
+        /* Container for the menu toggle button - now simplified */
+        .note-menu-container {
+            /* No longer needs 'position: relative' as menu is global */
+            display: flex;
+            align-items: center;
+        }
+
+        /* Style for the "..." menu toggle button */
+        .menu-toggle-btn {
+            background-color: transparent; /* Changed: Transparent background */
+            color: #8ACE00; /* Changed: Green color for text */
+            border: none;
+            border-radius: 5px;
+            padding: 3px 8px; /* Smaller padding */
+            cursor: pointer;
+            font-size: 1.1em; /* Larger font for ellipsis */
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            line-height: 1; /* Ensure button text aligns well */
+        }
+
+        .menu-toggle-btn:hover {
+            background-color: rgba(138, 206, 0, 0.2); /* Subtle green background on hover */
+            transform: scale(1.05);
+        }
+        .menu-toggle-btn:active {
+            transform: scale(0.95);
+            background-color: rgba(138, 206, 0, 0.3); /* Slightly darker green on active */
+        }
+
+        /* Styles for the GLOBAL Gemini AI menu */
+        #global-gemini-menu { /* Changed ID to be global */
+            position: fixed; /* Position fixed relative to the viewport */
+            background-color: #3a3a3a; /* Darker background for the menu */
+            border-radius: 5px;
+            padding: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            display: flex; /* Use flex to stack buttons */
+            flex-direction: column;
+            gap: 5px; /* Space between menu items */
+            z-index: 10000; /* Ensure menu is above everything else */
+            opacity: 0; /* Initially hidden */
+            visibility: hidden; /* Initially hidden */
+            transition: opacity 0.2s ease-out, visibility 0.2s ease-out; /* Removed transform for simpler positioning */
+            pointer-events: none; /* Allow clicks to pass through when hidden */
+            min-width: 100px; /* Ensure buttons don't get too small initially */
+        }
+
+        #global-gemini-menu.show {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto; /* Enable clicks when visible */
+        }
+
+        /* Delete button styles within the note */
+        .delete-btn, .gemini-btn { /* Apply styles to both delete and Gemini buttons */
+            background-color: #8ACE00;
+            color: black;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease, transform 0.2s ease, color 0.3s ease, box-shadow 0.3s ease; /* Added box-shadow transition */
+            font-family: 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            white-space: nowrap; /* Prevent text wrapping for menu items */
+        }
+
+        /* CAMBIO CLAVE: Estilos de hover y active para botones de acción */
+        .delete-btn:hover, .gemini-btn:hover {
+            background-color: #000000; /* Fondo negro al pasar el ratón */
+            color: #8ACE00; /* Texto verde brillante al pasar el ratón */
+            transform: scale(1.05);
+            /* Se añade la sombra verde brillante */
+            box-shadow: 0 0 10px #8ACE00; 
+        }
+
+        .delete-btn:active, .gemini-btn:active {
+            background-color: #1a1a1a; /* Un negro un poco más claro al hacer clic */
+            color: #8ACE00; /* Texto verde brillante al hacer clic */
+            transform: scale(0.95);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Sombra más sutil */
+        }
+
+        /* Note textarea styles */
+        textarea {
+            border: none;
+            background: transparent;
+            resize: none; /* Importante: Deshabilitar el redimensionamiento nativo en el textarea */
+            font-size: 1em;
+            outline: none;
+            flex-grow: 1; /* Let flexbox handle initial height/width within the column flex container */
+            padding: 0;
+            box-sizing: border-box;
+            color: #8ACE00; /* Bright green text color */
+            font-family: 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+            line-height: 1.4; /* Line spacing */
+            min-width: 100px; /* Set a reasonable minimum width for the textarea's own sizing */
+            min-height: 80px; /* Set a reasonable minimum height for the textarea's own sizing */
+            overflow: auto; /* Allow scrollbars for text content */
+        }
+
+        textarea::placeholder {
+            color: rgba(138, 206, 0, 0.6); /* More subtle placeholder */
+        }
+
+        /* Custom scrollbar styles (Webkit) */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #222;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #8ACE00;
+            border-radius: 10px;
+            border: 2px solid #222;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #70B900;
+        }
+
+        /* ESTILO PARA EL ICONO DE REDIMENSIONAMIENTO PERSONALIZADO */
+        .resize-handle {
+            position: absolute;
+            bottom: 0px; /* Ajusta la posición si es necesario */
+            right: 0px;  /* Ajusta la posición si es necesario */
+            width: 18px; /* Tamaño del icono de redimensionamiento */
+            height: 18px;
+            cursor: nwse-resize; /* Cursor para indicar redimensionamiento diagonal */
+            z-index: 10; /* Asegura que esté por encima del textarea y otros elementos */
+            /* Apariencia de un pequeño cuadrado con borde diagonal */
+            border-bottom: 4px solid rgba(138, 206, 0, 0.6); /* Línea diagonal */
+            border-right: 4px solid rgba(138, 206, 0, 0.6); /* Línea diagonal */
+            border-top: 4px solid transparent;
+            border-left: 4px solid transparent;
+            border-radius: 0 0 8px 0; /* Bordes solo en la esquina inferior derecha */
+            box-sizing: border-box; /* Asegura que los bordes estén dentro del tamaño */
+            opacity: 0.8;
+            transition: opacity 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+        
+        .resize-handle:hover {
+            opacity: 1;
+            border-color: rgba(138, 206, 0, 0.9); /* Más opaco al pasar el ratón */
+        }
+        
+        /* Ajustes para media queries del resize-handle */
+        @media (max-width: 768px) {
+            .resize-handle {
+                width: 15px;
+                height: 15px;
+                border-bottom: 3px solid rgba(138, 206, 0, 0.6);
+                border-right: 3px solid rgba(138, 206, 0, 0.6);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .resize-handle {
+                width: 12px;
+                height: 12px;
+                border-bottom: 2px solid rgba(138, 206, 0, 0.6);
+                border-right: 2px solid rgba(138, 206, 0, 0.6);
+            }
+        }
+
+        /* Loading indicator styles */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            z-index: 999;
+            color: #8ACE00;
+            font-size: 1.2em;
+            font-weight: bold;
+            pointer-events: none; /* Allow clicks to pass through to underlying elements */
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(138, 206, 0, 0.3);
+            border-top: 4px solid #8ACE00;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --------------------------------------------------------------------------------------- */
+        /* Temporary Notification Box Styles */
+        .notification-box {
+            position: fixed; /* Position relative to the viewport */
+            bottom: 20px; /* 20px from the bottom */
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%); /* Adjust for true centering */
+            background-color: #8ACE00; /* Green background */
+            color: black; /* Black text */
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            opacity: 0; /* Start invisible */
+            visibility: hidden; /* Start hidden */
+            transition: opacity 0.5s ease-out, visibility 0.5s ease-out; /* Smooth fade in/out */
+            z-index: 10000; /* Ensure it's on top of everything */
+            font-family: 'Arial Narrow', sans-serif;
+            font-weight: bold;
+            text-align: center;
+            white-space: nowrap; /* Prevent text wrapping */
+        }
+
+        .notification-box.show {
+            opacity: 1; /* Fade in */
+            visibility: visible; /* Make visible */
+        }
+        /* --------------------------------------------------------------------------------------- */
+    </style>
+</head>
+<body>
+    <h1>Sticky Notes</h1> <!-- Title changed to "Sticky Notes" -->
+    <button id="add-note-btn">Agregar Nota</button>
+    
+    <div id="board">
+        <!-- Notes will be added here dynamically with JavaScript -->
+    </div>
+
+    <!-- NEW: Global Gemini AI Menu - positioned fixed on screen -->
+    <div id="global-gemini-menu" class="gemini-menu">
+        <button id="summarize-btn" class="gemini-btn">Resumir</button>
+        <button id="expand-btn" class="gemini-btn">Expandir</button>
+        <button id="explain-btn" class="gemini-btn">Explicar</button>
+        <button id="respond-btn" class="gemini-btn">Responder</button>
+    </div>
+
+    <!-- NEW: Temporary Notification Box -->
+    <div id="notification" class="notification-box"></div>
+
+    <script>
+        const board = document.getElementById('board');
+        const addNoteBtn = document.getElementById('add-note-btn');
+        const notificationBox = document.getElementById('notification');
+        const globalGeminiMenu = document.getElementById('global-gemini-menu'); // Reference to the global menu
+
+        // References to the buttons within the global menu
+        const summarizeBtn = document.getElementById('summarize-btn');
+        const expandBtn = document.getElementById('expand-btn');
+        const explainBtn = document.getElementById('explain-btn');
+        const respondBtn = document.getElementById('respond-btn');
+
+        let zIndexCounter = 1;
+        let activeNoteForMenu = null; // Stores the note associated with the currently open menu
+
+        // Gemini API configuration
+        const API_KEY = "YOUR_API_KEY_HERE"; // Canvas will provide this key at runtime
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+        const MAX_RETRIES = 5;
+        const INITIAL_BACKOFF_DELAY = 1000; // 1 second
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadNotes();
+            // Attach click listeners to the global Gemini buttons
+            summarizeBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Stop click from propagating to document
+                if (activeNoteForMenu) summarizeNote(activeNoteForMenu);
+                hideGlobalGeminiMenu();
+            });
+            expandBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeNoteForMenu) expandNote(activeNoteForMenu);
+                hideGlobalGeminiMenu();
+            });
+            explainBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeNoteForMenu) explainNote(activeNoteForMenu);
+                hideGlobalGeminiMenu();
+            });
+            respondBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (activeNoteForMenu) respondNote(activeNoteForMenu);
+                hideGlobalGeminiMenu();
+            });
+        });
+
+        addNoteBtn.addEventListener('click', () => createNote());
+
+        /**
+         * Shows a temporary notification message at the bottom of the screen.
+         * @param {string} message - The message to display.
+         * @param {number} duration = 3000 - How long to display the message in milliseconds.
+         */
+        function showTemporaryNotification(message, duration = 3000) {
+            notificationBox.textContent = message;
+            notificationBox.classList.add('show');
+
+            setTimeout(() => {
+                notificationBox.classList.remove('show');
+            }, duration);
+        }
+
+        /**
+         * Shows the global Gemini menu positioned near the clicked toggle button.
+         * @param {HTMLElement} toggleButton - The '...' button that was clicked.
+         * @param {HTMLElement} note - The note element associated with the toggle button.
+         */
+        function showGlobalGeminiMenu(toggleButton, note) {
+            // If the menu is already open AND it's for the same note, hide it.
+            if (globalGeminiMenu.classList.contains('show') && activeNoteForMenu === note) {
+                hideGlobalGeminiMenu();
+                return; // Exit the function after hiding
+            }
+
+            // Close any currently open menu if it's for a DIFFERENT note (or if it's just open without an activeNote)
+            if (globalGeminiMenu.classList.contains('show')) {
+                hideGlobalGeminiMenu();
+            }
+
+            activeNoteForMenu = note; // Set the active note for the new menu
+
+            // Get the position of the toggle button relative to the viewport
+            const rect = toggleButton.getBoundingClientRect();
+
+            // Measure menu dimensions before positioning
+            globalGeminiMenu.style.visibility = 'hidden'; // Temporarily hide it for measurement
+            globalGeminiMenu.classList.add('show'); // Temporarily show to get dimensions
+            const menuWidth = globalGeminiMenu.offsetWidth;
+            const menuHeight = globalGeminiMenu.offsetHeight;
+            globalGeminiMenu.classList.remove('show'); // Hide it again immediately
+            globalGeminiMenu.style.visibility = ''; // Restore visibility state
+
+            // Calculate desired position: aligned with button's left, and below the button
+            let menuX = rect.left;
+            let menuY = rect.bottom + 5; // 5px below the button
+
+            // --- Boundary checks to prevent going off-screen ---
+            // Check right boundary
+            if (menuX + menuWidth > window.innerWidth - 10) { // 10px padding from right edge
+                menuX = window.innerWidth - menuWidth - 10;
+            }
+            // Check bottom boundary
+            if (menuY + menuHeight > window.innerHeight - 10) { // 10px padding from bottom edge
+                // If it goes off bottom, try to position it ABOVE the toggle button
+                menuY = rect.top - menuHeight - 5; // 5px above the button
+                // If it still goes off top after repositioning (for very small screens)
+                if (menuY < 10) { 
+                    menuY = 10; // Position near the top with 10px padding
+                }
+            }
+            // Check left boundary (should be fine if aligned left, but for completeness)
+            if (menuX < 10) { 
+                menuX = 10;
+            }
+            // --- End boundary checks ---
+
+            globalGeminiMenu.style.left = `${menuX}px`;
+            globalGeminiMenu.style.top = `${menuY}px`;
+
+            globalGeminiMenu.classList.add('show'); // Show the menu
+
+            // Bring the associated note to the front
+            zIndexCounter++;
+            note.style.zIndex = zIndexCounter;
+        }
+
+        /**
+         * Hides the global Gemini menu.
+         */
+        function hideGlobalGeminiMenu() {
+            globalGeminiMenu.classList.remove('show');
+            activeNoteForMenu = null; // Clear the active note
+        }
+
+        // Close global menu if clicking anywhere else on the document
+        document.addEventListener('click', (e) => {
+            // Check if the click was NOT inside the global Gemini menu AND NOT the toggle button of the current active note
+            const clickedInsideMenu = globalGeminiMenu.contains(e.target);
+            const clickedToggleButtonOfActiveNote = activeNoteForMenu && activeNoteForMenu.querySelector('.menu-toggle-btn').contains(e.target);
+            
+            if (!clickedInsideMenu && !clickedToggleButtonOfActiveNote) {
+                hideGlobalGeminiMenu();
+            }
+        });
+
+
+        /**
+         * Creates a new sticky note element and adds it to the board.
+         * @param {string} [id=null] - Unique ID of the note. If not provided, a new one is generated.
+         * @param {string} [content=''] - Initial content of the note.
+         * @param {number} [x=null] - X position (left) of the note for free dragging.
+         * @param {number} [y=null] - Y position (top) of the note for free dragging.
+         * @param {number} [zIndex=null] - z-index of the note.
+         * @param {number} [width=null] - Initial width of the note.
+         * @param {number} [height=null] - Initial height of the note.
+         */
+        function createNote(id = `note-${Date.now()}`, content = '', x = null, y = null, zIndex = null, width = null, height = null) {
+            const note = document.createElement('div');
+            note.classList.add('note');
+            note.setAttribute('data-id', id);
+
+            const header = document.createElement('div');
+            header.classList.add('note-header');
+            note.appendChild(header);
+
+            // Container for the menu toggle button
+            const noteMenuContainer = document.createElement('div');
+            noteMenuContainer.classList.add('note-menu-container');
+            header.appendChild(noteMenuContainer);
+
+            // Menu toggle button "..."
+            const menuToggleBtn = document.createElement('button');
+            menuToggleBtn.classList.add('menu-toggle-btn');
+            menuToggleBtn.textContent = '...';
+            noteMenuContainer.appendChild(menuToggleBtn);
+
+            // Attach listener to show the GLOBAL menu when this button is clicked
+            menuToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent note dragging
+                showGlobalGeminiMenu(menuToggleBtn, note); // Pass the button and the note itself
+            });
+            
+            // REMOVED: In-note geminiMenu and its buttons
+
+
+            // Delete button (aligned to the right of the header)
+            const deleteBtn = document.createElement('button');
+            deleteBtn.classList.add('delete-btn');
+            deleteBtn.textContent = 'X';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Add removing class to trigger animation before removal
+                note.classList.add('removing'); 
+                note.addEventListener('animationend', () => {
+                    note.remove();
+                    saveNotes();
+                    if (activeNoteForMenu === note) { // If the deleted note's menu was open, hide it
+                        hideGlobalGeminiMenu();
+                    }
+                }, { once: true }); // Ensure listener runs only once
+            });
+            header.appendChild(deleteBtn);
+
+            const textarea = document.createElement('textarea');
+            textarea.value = content;
+            textarea.placeholder = 'Escribe tu nota aquí...';
+            textarea.addEventListener('input', saveNotes);
+            note.appendChild(textarea);
+
+            // Add the custom resize handle
+            const resizeHandle = document.createElement('div');
+            resizeHandle.classList.add('resize-handle');
+            note.appendChild(resizeHandle);
+
+            board.appendChild(note); // Add to DOM first
+
+            // Determine if it's a new note (not loaded from storage)
+            const isNewNote = (x === null && y === null);
+
+            // Set initial size for new notes *before* positioning them randomly
+            const defaultNoteWidth = width || 160; 
+            const defaultNoteHeight = height || 120; 
+            note.style.width = `${defaultNoteWidth}px`;
+            note.style.height = `${defaultNoteHeight}px`;
+
+            if (!isNewNote) { // For notes loaded from storage
+                note.style.left = `${x}px`;
+                note.style.top = `${y}px`;
+                note.style.zIndex = zIndex;
+            } else { // For newly created notes
+                // Add a class to trigger the entrance animation
+                // This class is not explicitly needed if animation is on .note directly, but good for clarity
+                // note.classList.add('new-note-anim'); // Animation is on .note by default now.
+
+                const boardRect = board.getBoundingClientRect();
+                const margin = 20;
+                let randomX = Math.random() * (boardRect.width - defaultNoteWidth - (2 * margin)) + margin;
+                let randomY = Math.random() * (boardRect.height - defaultNoteHeight - (2 * margin)) + margin;
+
+                // Ensure random position keeps note fully within board boundaries
+                randomX = Math.max(margin, Math.min(randomX, boardRect.width - defaultNoteWidth - margin));
+                randomY = Math.max(margin, Math.min(randomY, boardRect.height - defaultNoteHeight - margin));
+
+                note.style.left = `${randomX}px`;
+                note.style.top = `${randomY}px`;
+                
+                // For new notes, z-index is assigned so they are "on top" if dragged later.
+                zIndexCounter++;
+                note.style.zIndex = zIndexCounter;
+            }
+            
+            // Ensure the global counter is up-to-date with the highest z-index of loaded notes.
+            if (zIndex !== null && parseInt(zIndex) > zIndexCounter) {
+                zIndexCounter = parseInt(zIndex);
+            }
+
+            makeNoteDraggable(note); // Enable dragging for all notes
+            makeNoteResizable(note); // Enable resizing for this note
+            saveNotes(); // Save state after creating/loading a note
+        }
+
+        /**
+         * Shows a loading spinner on a specific note.
+         * @param {HTMLElement} note - The note element to show the loading spinner on.
+         * @param {string} message - The message to display.
+         * @returns {HTMLElement} The created loading overlay element.
+         */
+        function showLoading(note, message) {
+            let loadingOverlay = note.querySelector('.loading-overlay');
+            if (!loadingOverlay) {
+                loadingOverlay = document.createElement('div');
+                loadingOverlay.classList.add('loading-overlay');
+                loadingOverlay.innerHTML = `<div class="loading-spinner"></div><span>${message}</span>`;
+                note.appendChild(loadingOverlay);
+            } else {
+                loadingOverlay.querySelector('span').textContent = message;
+                loadingOverlay.style.display = 'flex'; // Ensure it's visible if reused
+            }
+            return loadingOverlay;
+        }
+
+        /**
+         * Hides the loading spinner on a specific note.
+         * @param {HTMLElement} loadingOverlay - The loading overlay element to hide.
+         */
+        function hideLoading(loadingOverlay) {
+            if (loadingOverlay) {
+                loadingOverlay.style.display = 'none'; // Hide it instead of removing for potential reuse
+            }
+        }
+
+        /**
+         * Makes a note draggable within the board.
+         * @param {HTMLElement} note - The DOM element of the note to make draggable.
+         */
+        function makeNoteDraggable(note) {
+            let isDragging = false;
+            let offsetX, offsetY;
+
+            // Use 'document' for mousemove and mouseup to ensure dragging continues even if cursor leaves the note
+            // Attach these listeners when dragging starts (on mousedown)
+
+            note.addEventListener('mousedown', (e) => {
+                // Only drag if not clicking on the textarea, delete button, resize handle, or any part of the menu/toggle button
+                if (e.target.tagName !== 'TEXTAREA' && 
+                    e.target.tagName !== 'BUTTON' && 
+                    !e.target.classList.contains('resize-handle') && 
+                    !e.target.classList.contains('menu-toggle-btn') // Exclude the menu toggle button
+                    ) {
+                    isDragging = true;
+                    offsetX = e.clientX - note.getBoundingClientRect().left;
+                    offsetY = e.clientY - note.getBoundingClientRect().top;
+                    
+                    note.classList.add('dragging');
+                    note.classList.add('draggable'); // Add draggable class when starting to drag
+                    
+                    zIndexCounter++; 
+                    note.style.zIndex = zIndexCounter; 
+
+                    // Attach global listeners only when dragging starts
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                }
+            });
+
+            const onMouseMove = (e) => {
+                if (!isDragging) return;
+
+                const boardRect = board.getBoundingClientRect();
+                let newX = (e.clientX - boardRect.left) - offsetX;
+                let newY = (e.clientY - boardRect.top) - offsetY;
+
+                // Use the note's current dimensions for bounds checking
+                const currentNoteWidth = note.offsetWidth;
+                const currentNoteHeight = note.offsetHeight;
+
+                newX = Math.max(0, Math.min(newX, boardRect.width - currentNoteWidth));
+                newY = Math.max(0, Math.min(newY, boardRect.height - currentNoteHeight));
+
+                note.style.left = `${newX}px`;
+                note.style.top = `${newY}px`;
+            };
+
+            const onMouseUp = () => {
+                if (isDragging) {
+                    isDragging = false;
+                    note.classList.remove('dragging');
+                    saveNotes();
+                }
+                // Always remove these global listeners after mouseup
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+        }
+
+        /**
+         * Makes a note resizable using a custom handle.
+         * @param {HTMLElement} note - The DOM element of the note to make resizable.
+         */
+        function makeNoteResizable(note) {
+            const resizeHandle = note.querySelector('.resize-handle');
+            let isResizing = false;
+            let startX, startY, startWidth, startHeight;
+
+            resizeHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation(); // Prevent dragging the note when resizing
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startWidth = note.offsetWidth; // Current width of the note
+                startHeight = note.offsetHeight; // Current height of the note
+
+                note.classList.add('resizing'); // Add class for visual feedback during resizing
+
+                // Attach global mousemove and mouseup listeners for resizing
+                document.addEventListener('mousemove', onMouseMoveResize);
+                document.addEventListener('mouseup', onMouseUpResize);
+            });
+
+            const onMouseMoveResize = (e) => {
+                if (!isResizing) return;
+
+                const newWidth = startWidth + (e.clientX - startX);
+                const newHeight = startHeight + (e.clientY - startY);
+
+                // Define minimum sizes for the note (should match CSS .note min-width/min-height)
+                const minNoteWidth = 160; 
+                const minNoteHeight = 120; 
+
+                note.style.width = `${Math.max(minNoteWidth, newWidth)}px`;
+                note.style.height = `${Math.max(minNoteHeight, newHeight)}px`;
+            };
+
+            const onMouseUpResize = () => {
+                if (isResizing) {
+                    isResizing = false;
+                    note.classList.remove('resizing');
+                    saveNotes(); // Save new dimensions
+                }
+                // Remove listeners after resizing is complete
+                document.removeEventListener('mousemove', onMouseMoveResize);
+                document.removeEventListener('mouseup', onMouseUpResize);
+            };
+        }
+
+        /**
+         * Calls the Gemini API with exponential backoff for retries.
+         * @param {string} prompt - The text prompt for the LLM.
+         * @param {HTMLElement} note - The note element to update (for loading spinner).
+         * @param {string} loadingMessage - The message to show in the loading spinner.
+         * @param {number} retries = 0 - Current retry count.
+         * @returns {Promise<string>} - The generated text.
+         */
+        async function callGeminiAPI(prompt, note, loadingMessage, retries = 0) {
+            const textarea = note.querySelector('textarea');
+            const loadingOverlay = showLoading(note, loadingMessage);
+            textarea.disabled = true; // Disable textarea during loading
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+
+            try {
+                const response = await fetch(GEMINI_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    if (response.status === 429 && retries < MAX_RETRIES) { // Too Many Requests
+                        const delay = INITIAL_BACKOFF_DELAY * Math.pow(2, retries) + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        return callGeminiAPI(prompt, note, loadingMessage, retries + 1); // Retry with updated parameters
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error('Unexpected API response structure or no content.');
+                }
+            } catch (error) {
+                console.error('Error calling Gemini API:', error);
+                throw error; // Re-throw to be caught by the calling function
+            } finally {
+                hideLoading(loadingOverlay);
+                textarea.disabled = false;
+            }
+        }
+
+        /**
+         * Summarizes the content of a note using Gemini API.
+         * @param {HTMLElement} note - The note element.
+         */
+        async function summarizeNote(note) {
+            const textarea = note.querySelector('textarea');
+            const originalContent = textarea.value.trim();
+            if (!originalContent) {
+                showTemporaryNotification("La nota está vacía. Escribe algo para resumir.");
+                return;
+            }
+
+            try {
+                const prompt = `Resume concisamente la siguiente nota: "${originalContent}"`;
+                const summary = await callGeminiAPI(prompt, note, 'Resumiendo...'); // Pass note and message
+                textarea.value = summary;
+                saveNotes();
+            }
+            catch (error) {
+                showTemporaryNotification("Error al resumir. Inténtalo de nuevo.");
+                console.error("Failed to summarize note:", error);
+            }
+        }
+
+        /**
+         * Expands the content of a note using Gemini API.
+         * @param {HTMLElement} note - The note element.
+         */
+        async function expandNote(note) {
+            const textarea = note.querySelector('textarea');
+            const originalContent = textarea.value.trim();
+            if (!originalContent) {
+                showTemporaryNotification("La nota está vacía. Escribe algo para expandir.");
+                return;
+            }
+
+            try {
+                const prompt = `Expande la siguiente nota con más detalles y elabora sobre ella: "${originalContent}"`;
+                const expandedText = await callGeminiAPI(prompt, note, 'Expandiendo...'); // Pass note and message
+                textarea.value = expandedText;
+                saveNotes();
+            }
+            catch (error) {
+                showTemporaryNotification("Error al expandir. Inténtalo de nuevo.");
+                console.error("Failed to expand note:", error);
+            } finally {
+                // hideLoading and textarea.disabled is already handled by callGeminiAPI's finally block
+            }
+        }
+
+        /**
+         * Explains step-by-step instructions based on the content of a note using Gemini API.
+         * @param {HTMLElement} note - The note element.
+         */
+        async function explainNote(note) {
+            const textarea = note.querySelector('textarea');
+            const originalContent = textarea.value.trim();
+            if (!originalContent) {
+                showTemporaryNotification("La nota está vacía. Escribe algo para explicar.");
+                return;
+            }
+
+            try {
+                const prompt = `Basándote en el siguiente texto, explícame paso a paso qué tengo que hacer o cuáles son los pasos involucrados. Si no se especifican pasos, crea una secuencia lógica de acciones: "${originalContent}"`;
+                const explanation = await callGeminiAPI(prompt, note, 'Explicando...'); // Pass note and message
+                textarea.value = explanation;
+                saveNotes();
+            }
+            catch (error) {
+                showTemporaryNotification("Error al explicar. Inténtalo de nuevo.");
+                console.error("Failed to explain note:", error);
+            } finally {
+                // hideLoading and textarea.disabled is already handled by callGeminiAPI's finally block
+            }
+        }
+
+        /**
+         * Makes Gemini respond or perform an action based on the note's content.
+         * @param {HTMLElement} note - The note element.
+         */
+        async function respondNote(note) {
+            const textarea = note.querySelector('textarea');
+            const originalContent = textarea.value.trim();
+            if (!originalContent) {
+                showTemporaryNotification("La nota está vacía. Escribe una instrucción para que Gemini responda.");
+                return;
+            }
+
+            try {
+                const prompt = `Actúa como un asistente. Lee la siguiente nota y genera una respuesta o realiza la acción que se te indica en ella. Si no hay una instrucción clara, haz una respuesta creativa o continuada del texto: "${originalContent}"`;
+                const responseText = await callGeminiAPI(prompt, note, 'Respondiendo...'); // Pass note and message
+                textarea.value = responseText; // Update note with Gemini's response
+                saveNotes();
+            }
+            catch (error) {
+                showTemporaryNotification("Error al responder. Inténtalo de nuevo.");
+                console.error("Failed to respond to note:", error);
+            } finally {
+                // hideLoading and textarea.disabled is already handled by callGeminiAPI's finally block
+            }
+        }
+
+        /**
+         * Saves the current state of all notes to the browser's local storage.
+         */
+        function saveNotes() {
+            const notes = [];
+            document.querySelectorAll('.note').forEach(noteElement => {
+                const id = noteElement.getAttribute('data-id');
+                const content = noteElement.querySelector('textarea').value;
+                // Get positions and dimensions
+                const x = noteElement.offsetLeft;
+                const y = noteElement.offsetTop;
+                const zIndex = noteElement.style.zIndex;
+                const width = noteElement.offsetWidth; // Save current width
+                const height = noteElement.offsetHeight; // Save current height
+                notes.push({ id, content, x, y, zIndex, width, height }); // Include width and height
+            });
+            localStorage.setItem('stickyNotes', JSON.stringify(notes));
+        }
+
+        /**
+         * Loads notes from local storage and recreates them on the board.
+         */
+        function loadNotes() {
+            const storedNotes = localStorage.getItem('stickyNotes');
+            if (storedNotes) {
+                const notes = JSON.parse(storedNotes);
+                let maxZIndex = 0;
+                notes.forEach(noteData => {
+                    // Pass width and height to createNote
+                    createNote(noteData.id, noteData.content, noteData.x, noteData.y, noteData.zIndex, noteData.width, noteData.height);
+                    if (noteData.zIndex && parseInt(noteData.zIndex) > maxZIndex) {
+                        maxZIndex = parseInt(noteData.zIndex);
+                    }
+                });
+                zIndexCounter = maxZIndex;
+            }
+        }
+    </script>
+</body>
+</html>
