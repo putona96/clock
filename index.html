@@ -141,7 +141,7 @@
         }
 
         .note:hover {
-            box-shadow: 6px 6px 15px rgba(0, 0, 0, 0.7); /* More pronounced shadow on hover */
+            box-shadow: 6px 66px 15px rgba(0, 0, 0, 0.7); /* More pronounced shadow on hover */
             transform: translateY(-4px); /* Small lift effect on hover */
             background-color: #383838; /* Slightly lighter on hover */
         }
@@ -720,40 +720,57 @@
             let isDragging = false;
             let offsetX, offsetY;
 
-            // Use 'document' for mousemove and mouseup to ensure dragging continues even if cursor leaves the note
-            // Attach these listeners when dragging starts (on mousedown)
+            // Handle both mouse and touch events
+            const startDrag = (e) => {
+                // Determine if it's a touch event or mouse event
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-            note.addEventListener('mousedown', (e) => {
                 // Only drag if not clicking on the textarea, delete button, resize handle, or any part of the menu/toggle button
                 if (e.target.tagName !== 'TEXTAREA' && 
                     e.target.tagName !== 'BUTTON' && 
                     !e.target.classList.contains('resize-handle') && 
-                    !e.target.classList.contains('menu-toggle-btn') // Exclude the menu toggle button
+                    !e.target.classList.contains('menu-toggle-btn') 
                     ) {
                     isDragging = true;
-                    offsetX = e.clientX - note.getBoundingClientRect().left;
-                    offsetY = e.clientY - note.getBoundingClientRect().top;
+                    offsetX = clientX - note.getBoundingClientRect().left;
+                    offsetY = clientY - note.getBoundingClientRect().top;
                     
                     note.classList.add('dragging');
-                    note.classList.add('draggable'); // Add draggable class when starting to drag
+                    note.classList.add('draggable'); 
                     
                     zIndexCounter++; 
                     note.style.zIndex = zIndexCounter; 
 
-                    // Attach global listeners only when dragging starts
+                    // Attach global listeners for move and end events
                     document.addEventListener('mousemove', onMouseMove);
                     document.addEventListener('mouseup', onMouseUp);
+                    document.addEventListener('touchmove', onTouchMove, { passive: false }); // passive: false to allow preventDefault
+                    document.addEventListener('touchend', onTouchEnd);
+                    e.preventDefault(); // Prevent default touch behavior (e.g., scrolling)
                 }
-            });
+            };
 
             const onMouseMove = (e) => {
                 if (!isDragging) return;
+                const clientX = e.clientX;
+                const clientY = e.clientY;
+                updateNotePosition(clientX, clientY);
+            };
 
+            const onTouchMove = (e) => {
+                if (!isDragging || e.touches.length === 0) return;
+                const clientX = e.touches[0].clientX;
+                const clientY = e.touches[0].clientY;
+                updateNotePosition(clientX, clientY);
+                e.preventDefault(); // Prevent scrolling while dragging
+            };
+
+            const updateNotePosition = (clientX, clientY) => {
                 const boardRect = board.getBoundingClientRect();
-                let newX = (e.clientX - boardRect.left) - offsetX;
-                let newY = (e.clientY - boardRect.top) - offsetY;
+                let newX = (clientX - boardRect.left) - offsetX;
+                let newY = (clientY - boardRect.top) - offsetY;
 
-                // Use the note's current dimensions for bounds checking
                 const currentNoteWidth = note.offsetWidth;
                 const currentNoteHeight = note.offsetHeight;
 
@@ -764,16 +781,24 @@
                 note.style.top = `${newY}px`;
             };
 
-            const onMouseUp = () => {
+            const endDrag = () => {
                 if (isDragging) {
                     isDragging = false;
                     note.classList.remove('dragging');
                     saveNotes();
                 }
-                // Always remove these global listeners after mouseup
+                // Remove all global listeners
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', onMouseUp);
+                document.removeEventListener('touchmove', onTouchMove);
+                document.removeEventListener('touchend', onTouchEnd);
             };
+
+            const onMouseUp = endDrag;
+            const onTouchEnd = endDrag;
+
+            note.addEventListener('mousedown', startDrag);
+            note.addEventListener('touchstart', startDrag, { passive: false }); // passive: false to allow preventDefault
         }
 
         /**
@@ -785,28 +810,46 @@
             let isResizing = false;
             let startX, startY, startWidth, startHeight;
 
-            resizeHandle.addEventListener('mousedown', (e) => {
+            const startResize = (e) => {
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
                 e.stopPropagation(); // Prevent dragging the note when resizing
                 isResizing = true;
-                startX = e.clientX;
-                startY = e.clientY;
-                startWidth = note.offsetWidth; // Current width of the note
-                startHeight = note.offsetHeight; // Current height of the note
+                startX = clientX;
+                startY = clientY;
+                startWidth = note.offsetWidth; 
+                startHeight = note.offsetHeight; 
 
-                note.classList.add('resizing'); // Add class for visual feedback during resizing
+                note.classList.add('resizing'); 
 
-                // Attach global mousemove and mouseup listeners for resizing
+                // Attach global mouse and touch listeners for resizing
                 document.addEventListener('mousemove', onMouseMoveResize);
                 document.addEventListener('mouseup', onMouseUpResize);
-            });
+                document.addEventListener('touchmove', onTouchMoveResize, { passive: false });
+                document.addEventListener('touchend', onTouchEndResize);
+                e.preventDefault(); // Prevent default touch behavior
+            };
 
             const onMouseMoveResize = (e) => {
                 if (!isResizing) return;
+                const clientX = e.clientX;
+                const clientY = e.clientY;
+                updateNoteSize(clientX, clientY);
+            };
 
-                const newWidth = startWidth + (e.clientX - startX);
-                const newHeight = startHeight + (e.clientY - startY);
+            const onTouchMoveResize = (e) => {
+                if (!isResizing || e.touches.length === 0) return;
+                const clientX = e.touches[0].clientX;
+                const clientY = e.touches[0].clientY;
+                updateNoteSize(clientX, clientY);
+                e.preventDefault(); // Prevent scrolling while resizing
+            };
 
-                // Define minimum sizes for the note (should match CSS .note min-width/min-height)
+            const updateNoteSize = (clientX, clientY) => {
+                const newWidth = startWidth + (clientX - startX);
+                const newHeight = startHeight + (clientY - startY);
+
                 const minNoteWidth = 160; 
                 const minNoteHeight = 120; 
 
@@ -814,16 +857,24 @@
                 note.style.height = `${Math.max(minNoteHeight, newHeight)}px`;
             };
 
-            const onMouseUpResize = () => {
+            const endResize = () => {
                 if (isResizing) {
                     isResizing = false;
                     note.classList.remove('resizing');
-                    saveNotes(); // Save new dimensions
+                    saveNotes(); 
                 }
                 // Remove listeners after resizing is complete
                 document.removeEventListener('mousemove', onMouseMoveResize);
                 document.removeEventListener('mouseup', onMouseUpResize);
+                document.removeEventListener('touchmove', onTouchMoveResize);
+                document.removeEventListener('touchend', onTouchEndResize);
             };
+
+            const onMouseUpResize = endResize;
+            const onTouchEndResize = endResize;
+
+            resizeHandle.addEventListener('mousedown', startResize);
+            resizeHandle.addEventListener('touchstart', startResize, { passive: false });
         }
 
         /**
